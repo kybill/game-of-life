@@ -34,3 +34,16 @@ fn main() {
         d.clear_background(Color::WHITE);
     }
 }
+
+fn test_coord_system() {
+    let board = Board::new();
+    for i in -1000..1000 {
+        for j in -1000..1000 {
+            let (cx, cy, ix, iy) = board.get_chunk_coords(i, j);
+            let (rx, ry) = board.get_global_coords(cx, cy, ix, iy);
+            if i != rx || j != ry {
+                println!("Failed: {} - {}, {} - {}", i, j, rx, ry);
+            }
+        }
+    }
+}
