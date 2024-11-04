@@ -27,7 +27,6 @@ fn main() {
     board.get_chunk_coords(-13, -8);
     board.get_chunk_coords(-1, -1);
     board.get_chunk_coords(-16, -16);
-    board.get_chunk_coords(-17, -17);
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
