@@ -11,10 +11,20 @@ impl Board {
         }
     }
 
+    pub fn clone(&self) -> Board {
+        
+    }
+
     pub fn flip_cell(&mut self, x: i32, y: i32) {
         let (cx, cy, ix, iy) = self.get_chunk_coords(x, y);
         let chunk = self.get_or_create_chunk(cx, cy);
         chunk.flip_cell(ix, iy);
+    }
+
+    pub fn set_cell(&mut self, x: i32, y: i32, state: bool) {
+        let (cx, cy, ix, iy) = self.get_chunk_coords(x, y);
+        let chunk = self.get_or_create_chunk(cx, cy);
+        chunk.set_cell(ix, iy, state);
     }
 
     pub fn get_or_create_chunk(&mut self, chunk_x: i32, chunk_y: i32) -> &mut Chunk { 
@@ -53,6 +63,10 @@ impl Board {
         let y = if cy >= 0 { cy * 8 + iy } else { (cy + 1) * 8 - 1 - iy };
 
         (x, y)
+    }
+
+    pub fn step_simulation(&mut self) {
+        let next_board = 
     }
 }
 
