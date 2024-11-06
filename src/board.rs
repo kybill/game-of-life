@@ -12,7 +12,26 @@ impl Board {
     }
 
     pub fn clone(&self) -> Board {
-        
+        let mut keys = self.chunks.keys();
+        let mut vals = self.chunks.values();
+
+        let mut new_map = HashMap::new();
+
+        let mut stop = false;
+        while !stop {
+            let key = keys.next();
+            let val = vals.next();
+            if key.is_none() || val.is_none() {
+                stop = true;
+                continue;
+            }
+
+            new_map.insert(*key.unwrap(), *val.unwrap());
+        }
+
+        Board {
+            chunks: new_map
+        }
     }
 
     pub fn flip_cell(&mut self, x: i32, y: i32) {
@@ -66,18 +85,56 @@ impl Board {
     }
 
     pub fn step_simulation(&mut self) {
-        let next_board = 
+        //let next_board = self.clone();
+        let array = self.generate_array();
+    }
+
+    fn generate_array(&self) -> &[&[bool]] {
+        // Generate a 2d array of bools for the current board state, padded by 1 around every edge
+        // for quick calculations
+        let mut array = vec![];
+
+        let mut col = vec![];
+        col.push(false);
+        array.push(col.as_slice());
+
+        return array.as_slice();
     }
 }
 
 pub struct Chunk {
-    data: u64
+    data: u64,
+    lowest_x: u64,
+    highest_x: u64,
+    lowest_y: u64,
+    highest_y: u64
+}
+
+impl Clone for Chunk {
+    fn clone(&self) -> Chunk {
+        Chunk {
+            data: self.data,
+            lowest_x: 0,
+            highest_x: 0,
+            lowest_y: 0,
+            highest_y: 0
+        }
+    }
+}
+
+impl Copy for Chunk {
+
 }
 
 impl Chunk {
     pub fn new() -> Chunk {
         Chunk {
-            data: 0
+            data: 0,
+            lowest_x: 0,
+            highest_x: 0,
+            lowest_y: 0,
+            highest_y: 0
+
         }
     }
 
@@ -92,9 +149,24 @@ impl Chunk {
         if val {
             // Set cell to true -> bitwise or
             self.data |= temp_bit;
+            self.update_bounds(x as u64, y as u64);
         } else {
             // Set cell to false -> bitwise and with !temp_bit
             self.data &= !temp_bit;
+        }
+    }
+
+    fn update_bounds(&mut self, x: u64, y: u64) {
+        if x < self.lowest_x {
+            self.lowest_x = x;
+        } else if x > self.highest_x {
+            self.highest_x = x;
+        }
+
+        if y < self.lowest_y {
+            self.lowest_y = y;
+        } else if y > self.highest_y {
+            self.highest_y = y;
         }
     }
 
