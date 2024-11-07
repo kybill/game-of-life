@@ -19,14 +19,28 @@ fn main() {
     Static board is passed in from a binary file in command line arguments
     */
 
-    let board = Board::new();
-    board.get_chunk_coords(0, 0);
+    let mut board = Board::new();
+    /*board.get_chunk_coords(0, 0);
     board.get_chunk_coords(15, 15);
     board.get_chunk_coords(16, 16);
     board.get_chunk_coords(-1, -1);
     board.get_chunk_coords(-13, -8);
     board.get_chunk_coords(-1, -1);
-    board.get_chunk_coords(-16, -16);
+    board.get_chunk_coords(-16, -16);*/
+
+    board.set_cell(-1, -1, true);
+    board.set_cell(0, 0, true);
+    board.set_cell(1, 1, true);
+    board.set_cell(2, 2, true);
+
+    let chunk = board.get_chunk(0, 0).unwrap();
+    println!("{:0b}", chunk.get_raw());
+    println!("{} - {} - {}", chunk.get_cell(0, 0), chunk.get_cell(1, 1), chunk.get_cell(2, 2));
+
+    let (array, conv_x, conv_y) = board.generate_array();
+    for sub_array in array {
+        println!("{:?}", sub_array);
+    }
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
