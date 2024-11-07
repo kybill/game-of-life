@@ -352,6 +352,9 @@ impl Chunk {
     pub fn flip_cell(&mut self, x: i32, y: i32) {
         let xor_bit = 1 << y * 8 << x;
         self.data ^= xor_bit;
+        if self.get_cell(x, y) {
+            self.update_bounds(x as u8, y as u8);
+        }
     }
 
     pub fn set_cell(&mut self, x: i32, y: i32, val: bool) {

@@ -41,7 +41,7 @@ fn main() {
 
     // Mode is false when editing, true when running the simulation
     let mut mode = false;
-    let cell_size = 20;
+    let cell_size = 4;
     let padding = 1;
 
     let mut click_dragging = false;
