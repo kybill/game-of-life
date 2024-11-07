@@ -44,6 +44,9 @@ fn main() {
     let cell_size = 20;
     let padding = 1;
 
+    let mut click_dragging = false;
+    let mut dragged_coords = vec![];
+
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
         let (cx, cy) = (d.get_screen_width() / 2 - cell_size / 2, d.get_screen_height() / 2 - cell_size / 2);
@@ -56,7 +59,7 @@ fn main() {
             "Run Mode"
         };
         d.draw_text(text, 0, 0, 20, Color::GREEN);
-        d.draw_text(&if mode { running_board.chunk_count() } else { static_board.chunk_count() }.to_string(), 0, 20, 20, Color::GREEN);
+        d.draw_text(&format!("Chunks: {}", if mode { running_board.chunk_count() } else { static_board.chunk_count() }), 0, 20, 20, Color::GREEN);
 
         if d.is_key_pressed(KeyboardKey::KEY_SPACE) {
             if !mode {
@@ -80,23 +83,23 @@ fn main() {
                 println!("Saved board");
             }
 
-            if d.is_mouse_button_pressed(MouseButton::MOUSE_LEFT_BUTTON) {
-                let x = d.get_mouse_x() - cx;
-                let y = d.get_screen_height() - cy - d.get_mouse_y();
+            if click_dragging && d.is_mouse_button_up(MouseButton::MOUSE_LEFT_BUTTON) {
+                click_dragging = false;
+                dragged_coords.clear();
+            }
 
-                let mut bx = x / cell_size;
-                let mut by = y / cell_size;
-
-                if d.get_mouse_x() - cx < 0 {
-                    bx -= 1;
-                }
-                if d.get_mouse_y() - cy < 0 {
-                    by += 1;
+            if d.is_mouse_button_down(MouseButton::MOUSE_LEFT_BUTTON) {
+                if !click_dragging {
+                    click_dragging = true;
                 }
 
-                static_board.flip_cell(bx, by);
+                let (bx, by) = get_board_coords(d.get_mouse_x(), d.get_mouse_y(), cx, cy, cell_size, d.get_screen_height());
 
-                println!("{} - {}", bx, by);
+                if !dragged_coords.contains(&(bx, by)) {
+                    static_board.flip_cell(bx, by);
+                    println!("mouse down: {} - {} - {}", bx, by, dragged_coords.len());
+                    dragged_coords.push((bx, by));
+                }
             }
         }
 
@@ -115,6 +118,23 @@ fn main() {
             }
         }
     }
+}
+
+fn get_board_coords(mx: i32, my: i32, cx: i32, cy: i32, cell_size: i32, screen_height: i32) -> (i32, i32) {
+    let x = mx - cx;
+    let y = screen_height - cy - my;
+
+    let mut bx = x / cell_size;
+    let mut by = y / cell_size;
+
+    if mx - cx < 0 {
+        bx -= 1;
+    }
+    if my - cy < cell_size {
+        by += 1;
+    }
+
+    (bx, by)
 }
 
 fn test_coord_system() {
