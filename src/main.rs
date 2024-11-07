@@ -41,11 +41,16 @@ fn main() {
 
     // Mode is false when editing, true when running the simulation
     let mut mode = false;
-    let cell_size = 4;
+    let mut cell_size = 40;
     let padding = 1;
+    let mut simulation_step = 0;
 
     let mut click_dragging = false;
     let mut dragged_coords = vec![];
+
+    let mut screen_offset_x = 0.0;
+    let mut screen_offset_y = 0.0;
+    let scroll_speed = 0.25;
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
@@ -60,29 +65,60 @@ fn main() {
         };
         d.draw_text(text, 0, 0, 20, Color::GREEN);
         d.draw_text(&format!("Chunks: {}", if mode { running_board.chunk_count() } else { static_board.chunk_count() }), 0, 20, 20, Color::GREEN);
+        d.draw_text(&format!("FPS: {}", d.get_fps()), 0, 40, 20, Color::GREEN);
+        d.draw_text(&format!("Simulation Step: {}", simulation_step), 0, 60, 20, Color::GREEN);
 
         if d.is_key_pressed(KeyboardKey::KEY_SPACE) {
             if !mode {
                 running_board = static_board.clone();
+            } else {
+                simulation_step = 0;
             }
 
             mode = !mode;
         }
 
+        if d.is_key_down(KeyboardKey::KEY_W) {
+            screen_offset_y += scroll_speed;
+        }
+
+        if d.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) {
+            if d.is_key_pressed(KeyboardKey::KEY_S) {
+                static_board.save(static_board_file);
+                println!("Saved board");
+            }
+        } else {
+            if d.is_key_down(KeyboardKey::KEY_S) {
+                screen_offset_y -= scroll_speed;
+            }
+        }
+        if d.is_key_down(KeyboardKey::KEY_A) {
+            screen_offset_x += scroll_speed;
+        }
+        if d.is_key_down(KeyboardKey::KEY_D) {
+            screen_offset_x -= scroll_speed;
+        }
+
+        let scrolled = d.get_mouse_wheel_move();
+        let scale_factor = std::cmp::max(2, cell_size / 15) as f32;
+        if scrolled < 0.0 && cell_size >= 6 {
+            cell_size += (scrolled * scale_factor) as i32;
+        }
+        if scrolled > 0.0 && cell_size <= 90 {
+            cell_size += (scrolled * scale_factor) as i32;
+        }
+
         if mode {
             if d.is_key_pressed(KeyboardKey::KEY_DOWN) {
                 running_board.step_simulation();
+                simulation_step += 1;
             }
 
             if d.is_key_down(KeyboardKey::KEY_RIGHT) {
                 running_board.step_simulation();
+                simulation_step += 1;
             }
         } else {
-            if d.is_key_down(KeyboardKey::KEY_LEFT_CONTROL) && d.is_key_pressed(KeyboardKey::KEY_S) {
-                static_board.save(static_board_file);
-                println!("Saved board");
-            }
-
             if click_dragging && d.is_mouse_button_up(MouseButton::MOUSE_LEFT_BUTTON) {
                 click_dragging = false;
                 dragged_coords.clear();
@@ -93,11 +129,10 @@ fn main() {
                     click_dragging = true;
                 }
 
-                let (bx, by) = get_board_coords(d.get_mouse_x(), d.get_mouse_y(), cx, cy, cell_size, d.get_screen_height());
+                let (bx, by) = get_board_coords(d.get_mouse_x(), d.get_mouse_y(), cx, cy, cell_size, d.get_screen_height(), screen_offset_x, screen_offset_y);
 
                 if !dragged_coords.contains(&(bx, by)) {
                     static_board.flip_cell(bx, by);
-                    println!("mouse down: {} - {} - {}", bx, by, dragged_coords.len());
                     dragged_coords.push((bx, by));
                 }
             }
@@ -113,24 +148,24 @@ fn main() {
                     }
                     let (gx, gy) = running_board.get_global_coords(key.0, key.1, i, j);
 
-                    d.draw_rectangle(cx + gx * cell_size + padding, d.get_screen_height() - (cy + gy * cell_size + padding), cell_size - padding, cell_size - padding, Color::WHITE);
+                    d.draw_rectangle(cx + gx * cell_size + padding + screen_offset_x as i32, d.get_screen_height() - (cy + gy * cell_size + padding) + screen_offset_y as i32, cell_size - padding, cell_size - padding, Color::WHITE);
                 }
             }
         }
     }
 }
 
-fn get_board_coords(mx: i32, my: i32, cx: i32, cy: i32, cell_size: i32, screen_height: i32) -> (i32, i32) {
-    let x = mx - cx;
-    let y = screen_height - cy - my;
+fn get_board_coords(mx: i32, my: i32, cx: i32, cy: i32, cell_size: i32, screen_height: i32, offset_x: f32, offset_y: f32) -> (i32, i32) {
+    let x = mx - cx - offset_x as i32;
+    let y = screen_height - cy - my + offset_y as i32;
 
     let mut bx = x / cell_size;
     let mut by = y / cell_size;
 
-    if mx - cx < 0 {
+    if mx - cx - (offset_x as i32) < 0 {
         bx -= 1;
     }
-    if my - cy < cell_size {
+    if my - cy - (offset_y as i32) < cell_size {
         by += 1;
     }
 
