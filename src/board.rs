@@ -1,13 +1,16 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, Read, Write}};
+use std::{collections::HashMap, fs::File, io::{BufReader, Read, Write}, time::Instant};
+use cust::{function::Function, stream::Stream, prelude::*};
 
 pub struct Board {
-    pub chunks: HashMap<(i32, i32), Chunk>,
+    chunks: HashMap<(i32, i32), Chunk>,
+    pub true_positions: Vec<(i32, i32)>,
 }
 
 impl Board {
     pub fn new() -> Board {
         Board {
-            chunks: HashMap::new()
+            chunks: HashMap::new(),
+            true_positions: vec![],
         }
     }
 
@@ -17,9 +20,9 @@ impl Board {
         let mut len_buf = [0u8; 8];
         buf_reader.read_exact(&mut len_buf).unwrap();
         let len = usize::from_be_bytes(len_buf);
-        self.chunks = HashMap::new();
+        self.true_positions = vec![];
         
-        for _i in 0..len {
+        for _u in 0..len {
             let mut cx_be = [0u8; 4];
             let mut cy_be = [0u8; 4];
             let mut data_be = [0u8; 8];
@@ -53,9 +56,13 @@ impl Board {
             
             self.chunks.insert((cx, cy), chunk);
         }
+
+        self.true_positions = self.compress_chunk_array();
     }
 
-    pub fn save(&self, file: &str) {
+    pub fn save(&mut self, file: &str) {
+        self.chunks = self.decompress_chunk_array(&self.true_positions);
+
         // Format: No separators, just cx-cy-data for all chunks so i32-i32-u64
         let mut file_o = File::create(file).unwrap();
         let mut len_bytes = self.chunks.len().to_be_bytes();
@@ -76,7 +83,8 @@ impl Board {
 
     pub fn clone(&self) -> Board {
         Board {
-            chunks: self.chunks.clone()
+            chunks: self.chunks.clone(),
+            true_positions: self.true_positions.clone(),
         }
     }
 
@@ -84,7 +92,7 @@ impl Board {
         self.chunks.len()
     }
 
-    pub fn flip_cell(&mut self, x: i32, y: i32) {
+    pub fn flip_cell_chunk(&mut self, x: i32, y: i32) {
         let (cx, cy, ix, iy) = self.get_chunk_coords(x, y);
         let chunk = self.get_or_create_chunk(cx, cy);
         chunk.flip_cell(ix, iy);
@@ -93,12 +101,21 @@ impl Board {
         }
     }
 
-    pub fn set_cell(&mut self, x: i32, y: i32, state: bool) {
+    pub fn set_cell_chunk(&mut self, x: i32, y: i32, state: bool) {
         let (cx, cy, ix, iy) = self.get_chunk_coords(x, y);
         let chunk = self.get_or_create_chunk(cx, cy);
         chunk.set_cell(ix, iy, state);
         if !state && chunk.data == 0 {
             self.chunks.remove(&(cx, cy));
+        }
+    }
+
+    pub fn flip_cell(&mut self, x: i32, y: i32) {
+        if self.true_positions.contains(&(x, y)) {
+            let index = self.true_positions.iter().position(|val| *val == (x, y)).unwrap();
+            self.true_positions.swap_remove(index);
+        } else {
+            self.true_positions.push((x, y));
         }
     }
 
@@ -137,31 +154,38 @@ impl Board {
 
         (x, y)
     }
+    pub fn step_simulation_cpu(&mut self) -> (Instant, Instant, Instant, Instant) {
+        let start_time = Instant::now();
+        let mut time_data = (start_time, start_time, start_time, start_time);
 
-    pub fn step_simulation(&mut self) {
         //let next_board = self.clone();
-        let (array, to_check, x_offset, y_offset, width, height) = self.compress_chunk_array();
-        let mut true_cells = vec![];
+        let current_true_positions = &self.true_positions;
+        let mut to_check = vec![];
+        for (x, y) in current_true_positions {
+            for i in -1..=1 {
+                for j in -1..=1 {
+                    let val = (x + i, y + j);
+                    if !to_check.contains(&val) {
+                        to_check.push(val);
+                    }
+                }
+            }
+        }
+        let mut new_board = vec![];
+
+        time_data.1 = Instant::now();
 
         // TODO: Apply game logic inside of modified_array using to_check coordinates
         for (x, y) in to_check {
-            let val = array[y][x];
             let mut neighbor_count = 0;
 
-            for i in 0..=2 {
-                for j in 0..=2 {
-                    if i == 1 && j == 1 {
+            for i in -1..=1 {
+                for j in -1..=1 {
+                    if i == 0 && j == 0 {
                         continue;
                     }
-
-                    let nx = i32::try_from(x).unwrap() + i32::try_from(i).unwrap() - 1;
-                    let ny = i32::try_from(y).unwrap() + i32::try_from(j).unwrap() - 1;
-
-                    if nx < 0 || ny < 0 || nx > width - 1 || ny > height - 1 {
-                        continue;
-                    }
-
-                    if array[usize::try_from(ny).unwrap()][usize::try_from(nx).unwrap()] {
+                    
+                    if current_true_positions.contains(&(x + i, y + j)) {
                         neighbor_count += 1;
                     }
                 }
@@ -171,92 +195,189 @@ impl Board {
                 println!("{}", neighbor_count);
             }*/
 
-            if val {
+            if current_true_positions.contains(&(x, y)) {
                 match neighbor_count {
                     ..=1 => {},
                     2..=3 => {
-                        true_cells.push((x, y));
+                        new_board.push((x, y));
                     },
                     4.. => {}
                 }
             } else {
                 if neighbor_count == 3 {
-                    true_cells.push((x, y));
+                    new_board.push((x, y));
                 }
             }
         }
 
-        self.chunks = self.decompress_chunk_array(true_cells, x_offset, y_offset);
+        time_data.2 = Instant::now();
+
+        self.true_positions = new_board;
+
+        time_data.3 = Instant::now();        
+        return time_data;
     }
 
-    pub fn decompress_chunk_array(&self, true_cells: Vec<(usize, usize)>, x_offset: i32, y_offset: i32) -> HashMap<(i32, i32), Chunk> {
+    pub fn step_simulation(&mut self, check_true: &Function<'_>, check_false: &Function<'_>, stream: &Stream) -> (Instant, Instant, Instant, Instant) {
+        let start_time = Instant::now();
+        let mut time_data = (start_time, start_time, start_time, start_time);
+
+        if self.true_positions.len() == 0 {
+            return time_data;
+        }
+
+        let (_, block_size_true) = check_true.suggested_launch_configuration(0, 0.into()).unwrap();
+        let (_, block_size_false) = check_false.suggested_launch_configuration(0, 0.into()).unwrap();
+
+        let current_true_positions = &self.true_positions;
+        let mut true_cells_x = vec![0i32; current_true_positions.len()];
+        let mut true_cells_y = vec![0i32; current_true_positions.len()];
+        let mut false_cells_x = vec![];
+        let mut false_cells_y = vec![];
+
+        for i in 0..current_true_positions.len() {
+            let (x, y) = current_true_positions[i];
+            true_cells_x[i] = x;
+            true_cells_y[i] = y;
+
+            for j in -1..=1 {
+                for k in -1..=1 {
+                    if j == 0 && k == 0 {
+                        continue;
+                    }
+
+                    let (xc, yc) = (x + j, y + k);
+                    if !current_true_positions.contains(&(xc, yc)) {
+                        false_cells_x.push(xc);
+                        false_cells_y.push(yc);
+                    }
+                }
+            }
+        }
+
+        let grid_size_true = (true_cells_x.len() as u32 + block_size_true - 1) / block_size_true;
+        let grid_size_false = (false_cells_x.len() as u32 + block_size_false - 1) / block_size_false;
+
+        time_data.1 = Instant::now();
+
+        let tcx_gpu = true_cells_x.as_slice().as_dbuf().unwrap();
+        let tcy_gpu = true_cells_y.as_slice().as_dbuf().unwrap();
+        let fcx_gpu = false_cells_x.as_slice().as_dbuf().unwrap();
+        let fcy_gpu = false_cells_y.as_slice().as_dbuf().unwrap();
+        
+        let mut out_true_x = vec![i32::MAX; true_cells_x.len()];
+        let mut out_true_y = out_true_x.clone();
+        let mut out_false_x = vec![i32::MAX; false_cells_x.len()];
+        let mut out_false_y = out_false_x.clone();
+
+        let true_out_gpu_x = out_true_x.as_slice().as_dbuf().unwrap();
+        let true_out_gpu_y = out_true_y.as_slice().as_dbuf().unwrap();
+        let false_out_gpu_x = out_false_x.as_slice().as_dbuf().unwrap();
+        let false_out_gpu_y = out_false_y.as_slice().as_dbuf().unwrap();
+
+        let mut nb_ct_true = vec![0i32; true_cells_x.len()];
+        let mut nb_ct_false = vec![0i32; false_cells_x.len()];
+
+        let tnbct_gpu = nb_ct_true.as_slice().as_dbuf().unwrap();
+        let fnbct_gpu = nb_ct_false.as_slice().as_dbuf().unwrap();
+
+        /*print!("True Cells: ");
+        for i in 0..true_cells_x.len() {
+            let (tx, ty) = (true_cells_x[i], true_cells_y[i]);
+            print!("({}, {}), ", tx, ty);
+        }
+        print!("\nFalse Cells: ");
+        for j in 0..false_cells_x.len() {
+            let (fx, fy) = (false_cells_x[j], false_cells_y[j]);
+            print!("({}, {}), ", fx, fy);
+        }
+        println!("");*/
+
+        unsafe {
+            launch!(
+                check_true<<<grid_size_true, block_size_true, 0, stream>>>(
+                    tcx_gpu.len(),
+                    tcx_gpu.as_device_ptr(),
+                    tcy_gpu.as_device_ptr(),
+                    true_out_gpu_x.as_device_ptr(),
+                    true_out_gpu_y.as_device_ptr(),
+                    tnbct_gpu.as_device_ptr(),
+                )
+            ).unwrap();
+            launch!(
+                check_false<<<grid_size_false, block_size_false, 0, stream>>>(
+                    fcx_gpu.len(),
+                    fcx_gpu.as_device_ptr(),
+                    fcy_gpu.as_device_ptr(),
+                    tcx_gpu.len(),
+                    tcx_gpu.as_device_ptr(),
+                    tcy_gpu.as_device_ptr(),
+                    false_out_gpu_x.as_device_ptr(),
+                    false_out_gpu_y.as_device_ptr(),
+                    fnbct_gpu.as_device_ptr(),
+                )
+            ).unwrap();
+        }
+
+        stream.synchronize().unwrap();
+
+        true_out_gpu_x.copy_to(&mut out_true_x).unwrap();
+        true_out_gpu_y.copy_to(&mut out_true_y).unwrap();
+        false_out_gpu_x.copy_to(&mut out_false_x).unwrap();
+        false_out_gpu_y.copy_to(&mut out_false_y).unwrap();
+        tnbct_gpu.copy_to(&mut nb_ct_true).unwrap();
+        fnbct_gpu.copy_to(&mut nb_ct_false).unwrap();
+
+        time_data.2 = Instant::now();
+
+        // Take gpu data and put it back into board
+        let mut true_cells = vec![];
+        for i in 0..out_true_x.len() {
+            let (x, y) = (out_true_x[i], out_true_y[i]);
+            if x < i32::MAX {
+                true_cells.push((x, y));
+            }
+        }
+        
+        for j in 0..out_false_x.len() {
+            let (x, y) = (out_false_x[j], out_false_y[j]);
+            if x < i32::MAX && !true_cells.contains(&(x, y)) {
+                true_cells.push((x, y));
+            }
+        }
+
+        self.true_positions = true_cells;
+
+        time_data.3 = Instant::now();
+        return time_data;
+    }
+
+    pub fn decompress_chunk_array(&self, true_cells: &Vec<(i32, i32)>) -> HashMap<(i32, i32), Chunk> {
         let mut new_board = Board::new();
 
         for (ax, ay) in true_cells {
-            let gx = i32::try_from(ax).unwrap() - x_offset;
-            let gy = i32::try_from(ay).unwrap() - y_offset;
-
-            new_board.set_cell(gx, gy, true);
+            new_board.set_cell_chunk(*ax, *ay, true);
         }
 
         return new_board.chunks;
     }
 
-    pub fn compress_chunk_array(&self) -> (Vec<Vec<bool>>, Vec<(usize, usize)>, i32, i32, i32, i32) {
-        // Generate a 2d array of bools for the current board state, padded by 1 around every edge
-        // for quick calculations
-        
-        let (lx, ux, ly, uy) = self.get_bounds();
-        let width = (ux - lx) + 3;
-        let height = (uy - ly) + 3;
-        //println!("Bounds: X-({} - {}), Y-({} - {})", lx, ux, ly, uy);
+    pub fn compress_chunk_array(&self) -> Vec<(i32, i32)> {
+        let mut true_coords = vec![];
 
-        let conversion_x = -lx + 1;
-        let conversion_y = -ly + 1;
-
-        let mut array = vec![vec![false; width as usize]; height as usize];
-
-        let mut to_check = vec![];
-
-        // Fill in the actual chunk data
         for (chunk_coords, chunk) in &self.chunks {
             for ix in 0..8 {
                 for iy in 0..8 {
                     let (global_x, global_y) = self.get_global_coords(chunk_coords.0, chunk_coords.1, ix, iy);
                     
-                    //println!("{} - {}, {} - {}", global_x, conversion_x, global_y, conversion_y);
-                    
-                    let ax_i = global_x + conversion_x;
-                    let ay_i = global_y + conversion_y;
-
-                    if ax_i < 0 || ay_i < 0 {
-                        continue;
-                    }
-
-                    let ax: usize = ax_i.try_into().unwrap();
-                    let ay: usize = ay_i.try_into().unwrap();
-
-                    if ax >= width.try_into().unwrap() || ay >= height.try_into().unwrap() {
-                        continue;
-                    }
-
                     if chunk.get_cell(ix, iy) {
-                        for i in 0..=2 {
-                            for j in 0..=2 {
-                                let coords = (ax + i - 1, ay + j - 1);
-                                if !to_check.contains(&coords) {
-                                    to_check.push(coords);
-                                }
-                            }
-                        }
+                        true_coords.push((global_x, global_y));
                     }
-
-                    array[ay][ax] = chunk.get_cell(ix, iy);
                 }
             }
         }
 
-        return (array, to_check, conversion_x, conversion_y, width, height);
+        return true_coords;
     }
 
     fn get_bounds(&self) -> (i32, i32, i32, i32) {
