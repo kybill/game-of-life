@@ -4,7 +4,6 @@ use std::{fs, path::Path};
 
 use board::{Board, Chunk};
 use raylib::prelude::*;
-use cust::prelude::*;
 
 static PTX: &str = include_str!("gol.ptx");
 
@@ -14,13 +13,6 @@ fn main() {
         .title("Game of Life")
         .resizable()
         .build();
-
-    let _ctx = cust::quick_init().unwrap();
-    let gol_module = Module::from_ptx(PTX, &[]).unwrap();
-    let stream = Stream::new(StreamFlags::NON_BLOCKING, None).unwrap();
-
-    let cell_true_func = gol_module.get_function("check_true_cell").unwrap();
-    let cell_false_func = gol_module.get_function("check_false_cell").unwrap();
 
     let args = std::env::args().collect::<Vec<String>>();
     let static_board_file = if args.len() > 1 {

@@ -1,5 +1,4 @@
 use std::{collections::HashMap, fs::File, io::{BufReader, Read, Write}, time::Instant};
-use cust::{function::Function, stream::Stream, prelude::*};
 
 pub struct Board {
     chunks: HashMap<(i32, i32), Chunk>,
@@ -218,16 +217,13 @@ impl Board {
         return time_data;
     }
 
-    pub fn step_simulation(&mut self, check_true: &Function<'_>, check_false: &Function<'_>, stream: &Stream) -> (Instant, Instant, Instant, Instant) {
+    pub fn step_simulation(&mut self) -> (Instant, Instant, Instant, Instant) {
         let start_time = Instant::now();
         let mut time_data = (start_time, start_time, start_time, start_time);
 
         if self.true_positions.len() == 0 {
             return time_data;
         }
-
-        let (_, block_size_true) = check_true.suggested_launch_configuration(0, 0.into()).unwrap();
-        let (_, block_size_false) = check_false.suggested_launch_configuration(0, 0.into()).unwrap();
 
         let current_true_positions = &self.true_positions;
         let mut true_cells_x = vec![0i32; current_true_positions.len()];
@@ -255,68 +251,12 @@ impl Board {
             }
         }
 
-        let grid_size_true = (true_cells_x.len() as u32 + block_size_true - 1) / block_size_true;
-        let grid_size_false = (false_cells_x.len() as u32 + block_size_false - 1) / block_size_false;
-
         time_data.1 = Instant::now();
 
-        let tcx_gpu = true_cells_x.as_slice().as_dbuf().unwrap();
-        let tcy_gpu = true_cells_y.as_slice().as_dbuf().unwrap();
-        let fcx_gpu = false_cells_x.as_slice().as_dbuf().unwrap();
-        let fcy_gpu = false_cells_y.as_slice().as_dbuf().unwrap();
-        
-        let mut out_true_x = vec![i32::MAX; true_cells_x.len()];
-        let mut out_true_y = out_true_x.clone();
-        let mut out_false_x = vec![i32::MAX; false_cells_x.len()];
-        let mut out_false_y = out_false_x.clone();
-
-        let true_out_gpu_x = out_true_x.as_slice().as_dbuf().unwrap();
-        let true_out_gpu_y = out_true_y.as_slice().as_dbuf().unwrap();
-        let false_out_gpu_x = out_false_x.as_slice().as_dbuf().unwrap();
-        let false_out_gpu_y = out_false_y.as_slice().as_dbuf().unwrap();
-
-        /*print!("True Cells: ");
-        for i in 0..true_cells_x.len() {
-            let (tx, ty) = (true_cells_x[i], true_cells_y[i]);
-            print!("({}, {}), ", tx, ty);
-        }
-        print!("\nFalse Cells: ");
-        for j in 0..false_cells_x.len() {
-            let (fx, fy) = (false_cells_x[j], false_cells_y[j]);
-            print!("({}, {}), ", fx, fy);
-        }
-        println!("");*/
-
-        unsafe {
-            launch!(
-                check_true<<<grid_size_true, block_size_true, 0, stream>>>(
-                    tcx_gpu.len(),
-                    tcx_gpu.as_device_ptr(),
-                    tcy_gpu.as_device_ptr(),
-                    true_out_gpu_x.as_device_ptr(),
-                    true_out_gpu_y.as_device_ptr(),
-                )
-            ).unwrap();
-            launch!(
-                check_false<<<grid_size_false, block_size_false, 0, stream>>>(
-                    fcx_gpu.len(),
-                    fcx_gpu.as_device_ptr(),
-                    fcy_gpu.as_device_ptr(),
-                    tcx_gpu.len(),
-                    tcx_gpu.as_device_ptr(),
-                    tcy_gpu.as_device_ptr(),
-                    false_out_gpu_x.as_device_ptr(),
-                    false_out_gpu_y.as_device_ptr(),
-                )
-            ).unwrap();
-        }
-
-        stream.synchronize().unwrap();
-
-        true_out_gpu_x.copy_to(&mut out_true_x).unwrap();
-        true_out_gpu_y.copy_to(&mut out_true_y).unwrap();
-        false_out_gpu_x.copy_to(&mut out_false_x).unwrap();
-        false_out_gpu_y.copy_to(&mut out_false_y).unwrap();
+        let out_true_x = vec![];
+        let out_true_y = vec![];
+        let out_false_x = vec![];
+        let out_false_y = vec![];
 
         time_data.2 = Instant::now();
 
