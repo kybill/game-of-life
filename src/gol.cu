@@ -1,5 +1,5 @@
 #include <cstdint>
-extern "C" __global__ void check_true_cell(int len, int32_t *x_arr, int32_t *y_arr, int32_t *x_out, int32_t *y_out, int32_t *nb_ct) 
+extern "C" __global__ void check_true_cell(int len, int32_t *x_arr, int32_t *y_arr, int32_t *x_out, int32_t *y_out) 
 {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < len) {
@@ -18,8 +18,6 @@ extern "C" __global__ void check_true_cell(int len, int32_t *x_arr, int32_t *y_a
             }
         }
 
-        nb_ct[i] = neighbor_count;
-
         if (neighbor_count == 2 || neighbor_count == 3) {
             x_out[i] = x;
             y_out[i] = y;
@@ -27,7 +25,7 @@ extern "C" __global__ void check_true_cell(int len, int32_t *x_arr, int32_t *y_a
     }
 }
 
-extern "C" __global__ void check_false_cell(int len, int32_t *x_arr, int32_t *y_arr, int true_len, int32_t *true_x_arr, int32_t *true_y_arr, int32_t *x_out, int32_t *y_out, int32_t *nb_ct)
+extern "C" __global__ void check_false_cell(int len, int32_t *x_arr, int32_t *y_arr, int true_len, int32_t *true_x_arr, int32_t *true_y_arr, int32_t *x_out, int32_t *y_out)
 {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < len) {
@@ -42,8 +40,6 @@ extern "C" __global__ void check_false_cell(int len, int32_t *x_arr, int32_t *y_
                 neighbor_count++;
             }
         }
-
-        nb_ct[i] = neighbor_count;
 
         if (neighbor_count == 3) {
             x_out[i] = x;

@@ -275,12 +275,6 @@ impl Board {
         let false_out_gpu_x = out_false_x.as_slice().as_dbuf().unwrap();
         let false_out_gpu_y = out_false_y.as_slice().as_dbuf().unwrap();
 
-        let mut nb_ct_true = vec![0i32; true_cells_x.len()];
-        let mut nb_ct_false = vec![0i32; false_cells_x.len()];
-
-        let tnbct_gpu = nb_ct_true.as_slice().as_dbuf().unwrap();
-        let fnbct_gpu = nb_ct_false.as_slice().as_dbuf().unwrap();
-
         /*print!("True Cells: ");
         for i in 0..true_cells_x.len() {
             let (tx, ty) = (true_cells_x[i], true_cells_y[i]);
@@ -301,7 +295,6 @@ impl Board {
                     tcy_gpu.as_device_ptr(),
                     true_out_gpu_x.as_device_ptr(),
                     true_out_gpu_y.as_device_ptr(),
-                    tnbct_gpu.as_device_ptr(),
                 )
             ).unwrap();
             launch!(
@@ -314,7 +307,6 @@ impl Board {
                     tcy_gpu.as_device_ptr(),
                     false_out_gpu_x.as_device_ptr(),
                     false_out_gpu_y.as_device_ptr(),
-                    fnbct_gpu.as_device_ptr(),
                 )
             ).unwrap();
         }
@@ -325,8 +317,6 @@ impl Board {
         true_out_gpu_y.copy_to(&mut out_true_y).unwrap();
         false_out_gpu_x.copy_to(&mut out_false_x).unwrap();
         false_out_gpu_y.copy_to(&mut out_false_y).unwrap();
-        tnbct_gpu.copy_to(&mut nb_ct_true).unwrap();
-        fnbct_gpu.copy_to(&mut nb_ct_false).unwrap();
 
         time_data.2 = Instant::now();
 
